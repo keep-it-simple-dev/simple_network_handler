@@ -89,7 +89,17 @@ void main() {
 ```dart
 
 final dio = Dio();
-dio.interceptors.add(ErrorMappingInterceptor(errorRegistry: MyErrorRegistry()));
+dio.interceptors.add
+(
+ErrorMappingInterceptor
+(
+errorRegistry
+:
+MyErrorRegistry
+(
+)
+)
+);
 ```
 
 ### 5. Make Safe Network Calls
@@ -191,13 +201,17 @@ Future<void> loadUser(int userId) async {
 ### Custom Endpoint Logic
 
 ```dart
-return SimpleNetworkHandler.safeCall(
-() => _apiClient.getUserById(id),
-onEndpointError: (error) {
-if (error.response?.statusCode == 403) {
+requestExample() {
+  SimpleNetworkHandler.safeCall
+    (
+        () => _apiClient.getUserById(id),
+    onEndpointError: (error) {
+      if (error.response?.statusCode == 403) {
 // Custom logic here
+      }
+      return null; // Let registry handle it
+    },
+  );
 }
-return null; // Let registry handle it
-},
-);
+
 ```
