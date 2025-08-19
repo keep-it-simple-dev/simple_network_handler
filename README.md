@@ -8,7 +8,6 @@ A Flutter package that simplifies network error handling with automatic HTTP res
 - **Automatic Error Mapping**: HTTP status codes → Custom failure types
 - **Endpoint-Specific Handling**: Different errors for different endpoints
 - **Dio Integration**: Built-in interceptors for seamless integration
-- **Type Safety**: Full type safety with Either<Failure, Success> pattern
 - **Clean Architecture**: Perfect for repository pattern and dependency injection
 
 ## 📦 Installation
