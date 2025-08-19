@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/pub/points/simple_network_handler" alt="Pub Points">
 </p>
 
-A Flutter package for handling network errors with error registry and automatic response mapping using Dio interceptors.
+A Flutter package for handling network errors with error registry and automatic response mapping using Dio interceptor.
 
 ## Features
 
@@ -14,7 +14,6 @@ A Flutter package for handling network errors with error registry and automatic 
 - ✅ Endpoint-specific error handling
 - ✅ Global fallback error mappings
 - ✅ Dio exception handling (timeouts, connection errors)
-- ✅ Type-safe failure classes with Flutter context support
 
 ## Installation
 
@@ -47,18 +46,22 @@ class ValidationFailure extends Failure {
 class AppErrorRegistry extends ErrorRegistry {
   @override
   ErrorModelRegistry get endpointRegistry => {
-    '/api/login': {
-      401: (json) => const Left(UnauthorizedFailure()),
-      200: (json) => Right(TokenResponse.fromJson(json)),
-    },
+    
+    //All endpoints
     '*': {
       500: (json) => const Left(ServerFailure()),
       422: (json) => Left(ValidationFailure(json['message'])),
     },
+    
+    '/api/login': {
+      401: (json) => const Left(UnauthorizedFailure()),
+      201: (json) => Right(TokenResponse.fromJson(json)),
+    }
   };
 
+  //Fallback if no errors are matching in the registry
   @override
-  Failure get genericError => const NetworkFailure();
+  Failure get genericError => const GenericFailure();
 
   @override
   DioErrorRegistry get dioRegistry => {
