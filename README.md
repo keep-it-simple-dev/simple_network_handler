@@ -3,6 +3,29 @@
 A Flutter package that simplifies network error handling with automatic HTTP response mapping to
 `Either<Failure, Success>`.
 
+What if you could handle all http errors from one single place? This package does exactly that, allowing you to achieve something like this:
+```dart
+  ErrorModelRegistry get endpointRegistry => {
+  '*': {
+    422: (json) => Left(InvalidDataResponseFailure.fromJson(json)),
+    202: (json) => Left(ParameterRequiredResponse.fromJson(json)),
+    500: (json) => Left(ServerFailure.fromJson(json)),
+    504: (json) => Left(TimeoutFailure.fromJson(json)),
+  },
+  AccountApiPath.sendVerificationCode: {
+    403: (json) => Left(CodeSendForbiddenFailure.fromJson(json)),
+  },
+  AccountApiPath.resendVerificationCode: {
+    403: (json) => Left(ResendTimeErrorFailure.fromJson(json)),
+  },
+  AuthApiPath.login: {
+    404: (json) => Left(UserNotFoundFailure.fromJson(json)),
+    400: (json) => Left(IncorrectPasswordFailure.fromJson(json)),
+  },
+};
+
+```
+
 ## 🚀 Features
 
 - **Automatic Error Mapping**: HTTP status codes → Custom failure types
