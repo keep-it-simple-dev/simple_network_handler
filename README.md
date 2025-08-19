@@ -67,7 +67,7 @@ class AppErrorRegistry extends ErrorRegistry {
 }
 ```
 
-### 3. Setup Dio and NetworkHandler
+### 3. Setup Dio and SimpleNetworkHandler
 
 ```dart
 final dio = Dio();
@@ -76,15 +76,15 @@ final errorRegistry = AppErrorRegistry();
 // Add interceptor
 dio.interceptors.add(ErrorMappingInterceptor(errorRegistry: errorRegistry));
 
-// Setup NetworkHandler
-NetworkHandler.setErrorRegistry(errorRegistry);
+// Setup SimpleNetworkHandler
+SimpleNetworkHandler.setErrorRegistry(errorRegistry);
 ```
 
 ### 4. Make Safe Network Calls
 
 ```dart
 Future<Either<Failure, User>> getUser(int id) async {
-  return NetworkHandler.safeNetworkCall<User>(
+  return SimpleNetworkHandler.safeCall<User>(
     () => dio.get('/api/users/$id'),
   );
 }
@@ -101,7 +101,7 @@ result.fold(
 
 1. **HTTP Request** → Dio makes the request
 2. **Response Processing** → `ErrorMappingInterceptor` maps status codes using your registry
-3. **Result Extraction** → `NetworkHandler.safeNetworkCall` returns `Either<Failure, Success>`
+3. **Result Extraction** → `SimpleNetworkHandler.safeCall` returns `Either<Failure, Success>`
 
 ## Error Registry Mapping
 
@@ -131,15 +131,15 @@ DioErrorRegistry get dioRegistry => {
 
 ### Classes
 
-- **`NetworkHandler`** - Static utility for safe network calls
+- **`SimpleNetworkHandler`** - Static utility for safe network calls
 - **`ErrorRegistry`** - Abstract base for error mapping configuration  
 - **`ErrorMappingInterceptor`** - Dio interceptor for response processing
 - **`Failure`** - Base failure class with Flutter context support
 
 ### Methods
 
-- **`NetworkHandler.safeNetworkCall<T>()`** - Execute network call with error handling
-- **`NetworkHandler.setErrorRegistry()`** - Set global error registry
+- **`SimpleNetworkHandler.safeCall<T>()`** - Execute network call with error handling
+- **`SimpleNetworkHandler.setErrorRegistry()`** - Set global error registry
 
 ## License
 

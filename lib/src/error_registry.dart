@@ -1,6 +1,6 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
-import 'package:simple_network_handler/network_handler.dart';
+import 'package:simple_network_handler/simple_network_handler.dart';
 
 
 typedef EitherFactory = Either<Failure, dynamic> Function(Map<String, dynamic> json);

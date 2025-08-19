@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:simple_network_handler/network_handler.dart';
+import 'package:simple_network_handler/simple_network_handler.dart';
 
 
 class ErrorMappingInterceptor extends Interceptor {

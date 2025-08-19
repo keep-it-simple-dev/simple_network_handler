@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:simple_network_handler/network_handler.dart';
+import 'package:simple_network_handler/simple_network_handler.dart';
 
 // Test failure class
 class TestFailure extends Failure {
@@ -120,7 +120,7 @@ void main() {
       dio.interceptors.add(ErrorMappingInterceptor(errorRegistry: errorRegistry));
       
       // Setup NetworkHandler
-      NetworkHandler.setErrorRegistry(errorRegistry);
+      SimpleNetworkHandler.setErrorRegistry(errorRegistry);
     });
     
     tearDown(() {
@@ -135,7 +135,7 @@ void main() {
       ));
       
       // Act - Make request through complete flow: HTTP → Interceptor → NetworkHandler
-      final result = await NetworkHandler.safeNetworkCall<TestUser>(
+      final result = await SimpleNetworkHandler.safeCall<TestUser>(
         () async {
           final response = await dio.get('/api/users');
           // This should not be reached because interceptor will process it
@@ -163,7 +163,7 @@ void main() {
       ));
       
       // Act - Make request through complete flow
-      final result = await NetworkHandler.safeNetworkCall<TestUser>(
+      final result = await SimpleNetworkHandler.safeCall<TestUser>(
         () async {
           final response = await dio.post('/api/users');
           return TestUser.fromJson(response.data);
@@ -189,7 +189,7 @@ void main() {
       ));
       
       // Act
-      final result = await NetworkHandler.safeNetworkCall<TestUser>(
+      final result = await SimpleNetworkHandler.safeCall<TestUser>(
         () async {
           final response = await dio.get('/api/users');
           return TestUser.fromJson(response.data);
@@ -215,7 +215,7 @@ void main() {
       ));
       
       // Act
-      final result = await NetworkHandler.safeNetworkCall<String>(
+      final result = await SimpleNetworkHandler.safeCall<String>(
         () async {
           final response = await dio.get('/api/other');
           return response.data.toString();
@@ -235,7 +235,7 @@ void main() {
     
     test('should handle connection timeout without interceptor processing', () async {
       // Act - Simulate connection timeout (no HTTP response)
-      final result = await NetworkHandler.safeNetworkCall<String>(
+      final result = await SimpleNetworkHandler.safeCall<String>(
         () => throw DioException(
           requestOptions: RequestOptions(path: '/api/timeout'),
           type: DioExceptionType.connectionTimeout,
@@ -261,7 +261,7 @@ void main() {
       ));
       
       // Act
-      final result = await NetworkHandler.safeNetworkCall<TestUser>(
+      final result = await SimpleNetworkHandler.safeCall<TestUser>(
         () async {
           final response = await dio.get('/api/users');
           return TestUser.fromJson(response.data);

@@ -1,16 +1,16 @@
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
-import 'package:simple_network_handler/network_handler.dart';
+import 'package:simple_network_handler/simple_network_handler.dart';
 
 
-class NetworkHandler {
+class SimpleNetworkHandler {
   static ErrorRegistry? _errorRegistry;
 
   static void setErrorRegistry(ErrorRegistry registry) {
     _errorRegistry = registry;
   }
 
-  static Future<Either<Failure, T>> safeNetworkCall<T>(
+  static Future<Either<Failure, T>> safeCall<T>(
     Future<T> Function() request, {
     Either<Failure, T>? Function(DioException)? onEndpointError,
   }) async {
