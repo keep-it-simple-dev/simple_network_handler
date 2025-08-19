@@ -1,0 +1,17 @@
+name: simple_network_handler
+description: A package for handling network errors with error registry and interceptors
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dartz: ^0.10.1
+  dio: ^5.8.0+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
