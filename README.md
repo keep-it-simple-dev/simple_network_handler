@@ -87,19 +87,10 @@ void main() {
 ### 4. Configure Dio with Interceptor
 
 ```dart
-
-final dio = Dio();
-dio.interceptors.add
-(
-ErrorMappingInterceptor
-(
-errorRegistry
-:
-MyErrorRegistry
-(
-)
-)
-);
+main() {
+  final dio = Dio();
+  dio.interceptors.add(ErrorMappingInterceptor(errorRegistry: MyErrorRegistry()));
+}
 ```
 
 ### 5. Make Safe Network Calls
@@ -117,14 +108,6 @@ Future<Either<Failure, User>> getUser(int id) async {
 ## 🏗️ Advanced Usage - Production Example
 
 This section shows a complete production-ready implementation with clean architecture.
-
-### Architecture
-
-```
-UI Layer (Cubit/Bloc) → Repository → API Client (Retrofit)
-     ↓                      ↓              ↓
-Error Display ←── SimpleNetworkHandler ←── Error Registry
-```
 
 ### File Structure
 
@@ -202,15 +185,13 @@ Future<void> loadUser(int userId) async {
 
 ```dart
 requestExample() {
-  SimpleNetworkHandler.safeCall
-    (
-        () => _apiClient.getUserById(id),
-    onEndpointError: (error) {
-      if (error.response?.statusCode == 403) {
-// Custom logic here
-      }
-      return null; // Let registry handle it
-    },
+  SimpleNetworkHandler.safeCall(
+        () => _apiClient.getUserById(id), onEndpointError: (error) {
+    if (error.response?.statusCode == 403) {
+      // Custom logic here
+    }
+    return null; // Let registry handle it
+  },
   );
 }
 

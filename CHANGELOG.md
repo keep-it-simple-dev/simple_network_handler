@@ -1,3 +1,6 @@
+# 1.0.2
+  - chore: update readme
+
 # 1.0.1
 
   - chore: update readme
