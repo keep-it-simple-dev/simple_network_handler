@@ -1,3 +1,6 @@
+# 1.0.3
+  - feat: add handling of custom exceptions 
+  - 
 # 1.0.2
   - chore: update readme
 
