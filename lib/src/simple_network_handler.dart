@@ -45,8 +45,17 @@ class SimpleNetworkHandler {
 
       // Fallback to generic error
       return Left(_errorRegistry!.genericError);
-    } catch (_) {
-      rethrow;
+    } catch (e) {
+      // Handle custom exceptions using general error registry
+      if (_errorRegistry != null && e is Exception) {
+        final generalFailure = _errorRegistry!.generalRegistry[e];
+        if (generalFailure != null) {
+          return Left(generalFailure);
+        }
+      }
+
+      // Fallback to generic error for unhandled exceptions
+      return Left(_errorRegistry!.genericError);
     }
   }
 }
