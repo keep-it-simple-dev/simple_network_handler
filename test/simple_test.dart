@@ -55,6 +55,9 @@ class TestErrorRegistry extends ErrorRegistry {
   DioErrorRegistry get dioRegistry => {
     DioExceptionType.connectionTimeout: const TestFailure('Connection Timeout'),
   };
+
+  @override
+  GeneralErrorRegistry get generalRegistry => throw UnimplementedError();
 }
 
 // Mock HTTP adapter that simulates real HTTP responses

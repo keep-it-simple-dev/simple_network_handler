@@ -1,11 +1,11 @@
 import 'package:dio/dio.dart';
 import 'package:simple_network_handler/simple_network_handler.dart';
 
-
-typedef EitherFactory = Either<Failure, dynamic> Function(Map<String, dynamic> json);
+typedef EitherFactory = Either<Failure, dynamic> Function(
+    Map<String, dynamic> json);
 typedef ErrorModelRegistry = Map<String, Map<int, EitherFactory>>;
 typedef DioErrorRegistry = Map<DioExceptionType, Failure>;
-typedef GeneralErrorRegistry = Map<Exception, Failure>;
+typedef GeneralErrorRegistry = Map<Type, Failure Function(Object exception)>;
 
 /// Abstract error registry that can be implemented by different projects
 abstract class ErrorRegistry {

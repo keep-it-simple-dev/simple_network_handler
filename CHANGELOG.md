@@ -1,6 +1,10 @@
+# 1.0.4
+  - feat: change general error to accept types and provide access to the exception itself
+  - feat: add logging functionality
+
 # 1.0.3
   - feat: add handling of custom exceptions 
-  - 
+
 # 1.0.2
   - chore: update readme
 
