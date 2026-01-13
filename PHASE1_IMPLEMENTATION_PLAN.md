@@ -10,41 +10,52 @@ Phase 1 focuses on **Core Reliability** features:
 
 ---
 
-## Design Principle: Global Defaults + Per-Call Overrides
+## Design Principle: ErrorRegistry Defaults + Per-Call Overrides
 
-All Phase 1 features support a **two-level configuration** approach:
+All Phase 1 features support a **two-level configuration** approach via ErrorRegistry:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Configuration Hierarchy                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│   1. Global Defaults (set once at app startup)                  │
-│      └── SimpleNetworkHandler.setGlobalConfig(...)              │
-│          OR via ErrorRegistry properties                         │
+│   1. Global Defaults (via ErrorRegistry properties)             │
+│      └── defaultRetryConfig, defaultTimeoutConfig, etc.         │
 │                                                                  │
-│   2. Per-Call Overrides (optional, for specific requests)       │
+│   2. Endpoint-Specific (via ErrorRegistry registries)           │
+│      └── retryRegistry, timeoutRegistry per endpoint            │
+│                                                                  │
+│   3. Per-Call Overrides (optional, for specific requests)       │
 │      └── safeCall(..., options: CallOptions(...))               │
 │                                                                  │
-│   Resolution: Per-call options merge with & override globals    │
+│   Resolution: Per-call > Endpoint-specific > Global defaults    │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Example:**
 ```dart
-// At app startup - set global defaults
-SimpleNetworkHandler.setGlobalConfig(GlobalConfig(
-  retry: RetryConfig(maxAttempts: 3),
-  timeout: TimeoutConfig.standard,
-));
+// In ErrorRegistry - set global and endpoint-specific defaults
+class MyErrorRegistry extends ErrorRegistry {
+  @override
+  RetryConfig? get defaultRetryConfig => const RetryConfig(maxAttempts: 3);
 
-// In repository - uses global defaults automatically
+  @override
+  TimeoutConfig? get defaultTimeoutConfig => TimeoutConfig.standard;
+
+  @override
+  Map<String, RetryConfig> get retryRegistry => {
+    '/api/upload': RetryConfig.conservative(),  // Different retry for uploads
+    '/api/payment': RetryConfig.disabled,       // No retry for payments
+  };
+}
+
+// In repository - uses registry defaults automatically
 final result = await SimpleNetworkHandler.safeCall(
   () => api.getProducts(),
 );
 
-// For specific call - override timeout only, keep global retry
+// For specific call - override timeout only, keep registry retry
 final result = await SimpleNetworkHandler.safeCall(
   () => api.uploadLargeFile(file),
   options: CallOptions(timeout: TimeoutConfig.longRunning),
