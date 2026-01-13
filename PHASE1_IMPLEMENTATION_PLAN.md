@@ -6,6 +6,56 @@ Phase 1 focuses on **Core Reliability** features:
 1. **Retry Mechanism** - Automatic retry with exponential backoff
 2. **Request Cancellation** - CancelToken support with dedicated failure type
 3. **Timeout Configuration** - Configurable timeouts at multiple levels
+4. **Global Configuration** - Set defaults once, override per-call when needed
+
+---
+
+## Design Principle: Global Defaults + Per-Call Overrides
+
+All Phase 1 features support a **two-level configuration** approach:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Configuration Hierarchy                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   1. Global Defaults (set once at app startup)                  │
+│      └── SimpleNetworkHandler.setGlobalConfig(...)              │
+│          OR via ErrorRegistry properties                         │
+│                                                                  │
+│   2. Per-Call Overrides (optional, for specific requests)       │
+│      └── safeCall(..., options: CallOptions(...))               │
+│                                                                  │
+│   Resolution: Per-call options merge with & override globals    │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Example:**
+```dart
+// At app startup - set global defaults
+SimpleNetworkHandler.setGlobalConfig(GlobalConfig(
+  retry: RetryConfig(maxAttempts: 3),
+  timeout: TimeoutConfig.standard,
+));
+
+// In repository - uses global defaults automatically
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.getProducts(),
+);
+
+// For specific call - override timeout only, keep global retry
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.uploadLargeFile(file),
+  options: CallOptions(timeout: TimeoutConfig.longRunning),
+);
+
+// For specific call - disable retry entirely
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.sendOneTimeToken(),
+  options: CallOptions(retry: RetryConfig.disabled),
+);
+```
 
 ---
 
@@ -612,6 +662,426 @@ static Future<Either<Failure, T>> safeCall<T>(
 
 ---
 
+## 4. Global Configuration
+
+### Design Goals
+- Set retry, timeout, and other defaults once at app initialization
+- Apply defaults automatically to all `safeCall()` invocations
+- Allow per-call overrides that merge with globals
+- Support disabling features per-call even when globally enabled
+- Keep backward compatibility (no global config = current behavior)
+
+### New Files
+
+#### `lib/src/global_config.dart`
+
+```dart
+import 'retry_config.dart';
+import 'timeout_config.dart';
+
+/// Global configuration for SimpleNetworkHandler
+/// Set once at app startup, applies to all safeCall() invocations
+class GlobalConfig {
+  /// Default retry configuration for all requests
+  /// Set to null to disable retry globally (default)
+  /// Set to RetryConfig.disabled to explicitly disable
+  final RetryConfig? retry;
+
+  /// Default timeout configuration for all requests
+  final TimeoutConfig? timeout;
+
+  /// Default operation timeout (total time including retries)
+  final Duration? operationTimeout;
+
+  /// Global callback invoked before each retry attempt
+  /// Useful for centralized logging/metrics
+  final void Function(int attempt, Duration delay, Object error)? onRetry;
+
+  /// Global callback invoked when a request fails (after all retries)
+  /// Useful for centralized error tracking
+  final void Function(Object error, StackTrace? stackTrace)? onError;
+
+  const GlobalConfig({
+    this.retry,
+    this.timeout,
+    this.operationTimeout,
+    this.onRetry,
+    this.onError,
+  });
+
+  /// No configuration - all features disabled (default behavior)
+  static const none = GlobalConfig();
+
+  /// Standard production defaults
+  factory GlobalConfig.standard() => GlobalConfig(
+        retry: const RetryConfig(
+          maxAttempts: 3,
+          initialDelay: Duration(seconds: 1),
+        ),
+        timeout: TimeoutConfig.standard,
+      );
+
+  /// Aggressive retry for unreliable networks
+  factory GlobalConfig.aggressive() => GlobalConfig(
+        retry: RetryConfig.aggressive(),
+        timeout: TimeoutConfig.quick,
+      );
+
+  /// Merge with per-call options (per-call takes precedence)
+  GlobalConfig mergeWith(CallOptions? options) {
+    if (options == null) return this;
+
+    return GlobalConfig(
+      retry: options.retry ?? retry,
+      timeout: options.timeout ?? timeout,
+      operationTimeout: options.operationTimeout ?? operationTimeout,
+      onRetry: options.onRetry ?? onRetry,
+      onError: onError, // Global only - not overridable per-call
+    );
+  }
+}
+```
+
+#### Update `lib/src/retry_config.dart` - Add disabled preset
+
+```dart
+class RetryConfig {
+  // ... existing fields ...
+
+  /// Explicitly disabled retry - use to override global config
+  static const disabled = RetryConfig(maxAttempts: 0);
+
+  /// Check if retry is disabled
+  bool get isDisabled => maxAttempts <= 0;
+
+  // ... rest of implementation ...
+}
+```
+
+#### Update `lib/src/call_options.dart` - Add merge support
+
+```dart
+import 'package:dio/dio.dart';
+import 'timeout_config.dart';
+import 'retry_config.dart';
+
+/// Options for a single safeCall invocation
+/// Merges with global config - per-call values take precedence
+class CallOptions {
+  /// Retry configuration for this call
+  /// - null: use global default
+  /// - RetryConfig.disabled: explicitly disable retry for this call
+  /// - RetryConfig(...): custom config for this call
+  final RetryConfig? retry;
+
+  /// Cancel token for this call
+  final CancelToken? cancelToken;
+
+  /// Timeout configuration for this call
+  /// - null: use global default
+  /// - TimeoutConfig(...): custom config for this call
+  final TimeoutConfig? timeout;
+
+  /// Overall timeout for the entire operation (including retries)
+  /// - null: use global default
+  /// - Duration: custom timeout for this call
+  final Duration? operationTimeout;
+
+  /// Per-call retry callback (supplements global onRetry)
+  final void Function(int attempt, Duration delay, Object error)? onRetry;
+
+  const CallOptions({
+    this.retry,
+    this.cancelToken,
+    this.timeout,
+    this.operationTimeout,
+    this.onRetry,
+  });
+
+  /// Disable retry for this call (even if globally enabled)
+  factory CallOptions.noRetry() => CallOptions(retry: RetryConfig.disabled);
+
+  /// Create options with just retry config
+  factory CallOptions.withRetry(RetryConfig retry) => CallOptions(retry: retry);
+
+  /// Create options with just timeout
+  factory CallOptions.withTimeout(TimeoutConfig timeout) =>
+      CallOptions(timeout: timeout);
+}
+```
+
+### Changes to `simple_network_handler.dart`
+
+```dart
+class SimpleNetworkHandler {
+  static ErrorRegistry? _errorRegistry;
+  static bool _enableDebugLogging = false;
+  static GlobalConfig _globalConfig = GlobalConfig.none;  // NEW
+
+  // ... existing methods ...
+
+  /// Set global configuration for all safeCall() invocations
+  /// Call once at app startup
+  static void setGlobalConfig(GlobalConfig config) {
+    _globalConfig = config;
+  }
+
+  /// Get current global configuration (for testing/debugging)
+  static GlobalConfig get globalConfig => _globalConfig;
+
+  /// Reset to default configuration (mainly for testing)
+  static void resetGlobalConfig() {
+    _globalConfig = GlobalConfig.none;
+  }
+
+  static Future<Either<Failure, T>> safeCall<T>(
+    Future<T> Function() request, {
+    Either<Failure, T>? Function(DioException)? onEndpointError,
+    CallOptions? options,
+  }) async {
+    assert(_errorRegistry != null,
+        'Error registry must be set before calling safeNetworkCall');
+
+    // Merge global config with per-call options
+    final effectiveConfig = _globalConfig.mergeWith(options);
+    final retryConfig = effectiveConfig.retry;
+    final cancelToken = options?.cancelToken;
+
+    int attempt = 0;
+    final stopwatch = Stopwatch()..start();
+
+    while (true) {
+      // Check operation timeout
+      if (effectiveConfig.operationTimeout != null &&
+          stopwatch.elapsed >= effectiveConfig.operationTimeout!) {
+        return Left(_createTimeoutFailure('Operation timeout exceeded'));
+      }
+
+      // Check for cancellation
+      if (cancelToken?.isCancelled ?? false) {
+        return Left(_createCancellationFailure());
+      }
+
+      try {
+        final result = await request();
+        return Right(result);
+
+      } on DioException catch (e, stackTrace) {
+        _logError(e, stackTrace);
+        effectiveConfig.onError?.call(e, stackTrace);
+
+        // Handle cancellation
+        if (e.type == DioExceptionType.cancel) {
+          return Left(_createCancellationFailure());
+        }
+
+        // Check if we should retry
+        if (retryConfig != null &&
+            !retryConfig.isDisabled &&
+            retryConfig.shouldRetry(e, attempt)) {
+          final delay = retryConfig.getDelayForAttempt(attempt);
+
+          // Call both global and per-call onRetry callbacks
+          effectiveConfig.onRetry?.call(attempt + 1, delay, e);
+          options?.onRetry?.call(attempt + 1, delay, e);
+
+          await Future.delayed(delay);
+          attempt++;
+          continue;
+        }
+
+        // No retry - proceed with error handling
+        // [existing error handling logic]
+
+      } catch (e, stackTrace) {
+        _logError(e, stackTrace);
+        effectiveConfig.onError?.call(e, stackTrace);
+
+        // Check if we should retry
+        if (retryConfig != null &&
+            !retryConfig.isDisabled &&
+            retryConfig.shouldRetry(e, attempt)) {
+          final delay = retryConfig.getDelayForAttempt(attempt);
+          effectiveConfig.onRetry?.call(attempt + 1, delay, e);
+          options?.onRetry?.call(attempt + 1, delay, e);
+          await Future.delayed(delay);
+          attempt++;
+          continue;
+        }
+
+        // [existing error handling logic]
+      }
+    }
+  }
+}
+```
+
+### Alternative: Configuration via ErrorRegistry
+
+For users who prefer keeping all configuration in one place, extend `ErrorRegistry`:
+
+```dart
+abstract class ErrorRegistry {
+  // ... existing properties ...
+
+  /// Default retry configuration for all requests
+  /// Override to enable global retry
+  RetryConfig? get defaultRetryConfig => null;
+
+  /// Default timeout configuration for all requests
+  /// Override to set global timeouts
+  TimeoutConfig? get defaultTimeoutConfig => null;
+
+  /// Default operation timeout
+  Duration? get defaultOperationTimeout => null;
+
+  /// Endpoint-specific retry configuration
+  /// Key is endpoint path, overrides defaultRetryConfig
+  Map<String, RetryConfig> get retryRegistry => const {};
+
+  /// Get effective retry config for an endpoint
+  RetryConfig? getRetryConfigForEndpoint(String path) {
+    return retryRegistry[path] ??
+           retryRegistry[allEndpointsKey] ??
+           defaultRetryConfig;
+  }
+}
+```
+
+**Usage with ErrorRegistry:**
+```dart
+class MyErrorRegistry extends ErrorRegistry {
+  // ... existing error mappings ...
+
+  @override
+  RetryConfig? get defaultRetryConfig => const RetryConfig(maxAttempts: 3);
+
+  @override
+  TimeoutConfig? get defaultTimeoutConfig => TimeoutConfig.standard;
+
+  @override
+  Map<String, RetryConfig> get retryRegistry => {
+    // Aggressive retry for critical endpoints
+    '/api/payment': RetryConfig.aggressive(),
+    // No retry for idempotency-sensitive endpoints
+    '/api/charge': RetryConfig.disabled,
+  };
+}
+```
+
+### Configuration Resolution Order
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Resolution Priority (highest to lowest)       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   1. CallOptions parameter in safeCall()                        │
+│      └── Explicit per-call override                              │
+│                                                                  │
+│   2. ErrorRegistry endpoint-specific (retryRegistry, etc.)      │
+│      └── Per-endpoint defaults in registry                       │
+│                                                                  │
+│   3. GlobalConfig via setGlobalConfig()                         │
+│      └── App-wide defaults                                       │
+│                                                                  │
+│   4. ErrorRegistry defaults (defaultRetryConfig, etc.)          │
+│      └── Registry-level defaults                                 │
+│                                                                  │
+│   5. Package defaults (no retry, no timeout)                    │
+│      └── Backward compatible behavior                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Complete Initialization Example
+
+```dart
+void main() async {
+  // 1. Set up error registry (required, existing pattern)
+  SimpleNetworkHandler.setErrorRegistry(MyErrorRegistry());
+
+  // 2. Set up global config (optional, new pattern)
+  SimpleNetworkHandler.setGlobalConfig(GlobalConfig(
+    retry: const RetryConfig(
+      maxAttempts: 3,
+      initialDelay: Duration(seconds: 1),
+      onRetry: _logRetry,
+    ),
+    timeout: TimeoutConfig.standard,
+    operationTimeout: Duration(minutes: 2),
+    onError: _trackError,
+  ));
+
+  // 3. Enable debug logging (optional, existing pattern)
+  SimpleNetworkHandler.setDebugLogging(kDebugMode);
+
+  runApp(MyApp());
+}
+
+void _logRetry(int attempt, Duration delay, Object error) {
+  logger.info('Retry attempt $attempt after ${delay.inSeconds}s');
+}
+
+void _trackError(Object error, StackTrace? stackTrace) {
+  crashlytics.recordError(error, stackTrace);
+}
+```
+
+### Usage Patterns
+
+#### Pattern 1: Global defaults only (most common)
+```dart
+// Setup once
+SimpleNetworkHandler.setGlobalConfig(GlobalConfig.standard());
+
+// Use everywhere - retry and timeout applied automatically
+final result = await SimpleNetworkHandler.safeCall(() => api.getData());
+```
+
+#### Pattern 2: Global + per-call override
+```dart
+// Setup global defaults
+SimpleNetworkHandler.setGlobalConfig(GlobalConfig.standard());
+
+// Override for specific call
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.uploadLargeFile(file),
+  options: CallOptions(
+    timeout: TimeoutConfig.longRunning,
+    operationTimeout: Duration(minutes: 10),
+  ),
+);
+```
+
+#### Pattern 3: Global enabled, per-call disabled
+```dart
+// Setup global retry
+SimpleNetworkHandler.setGlobalConfig(GlobalConfig(
+  retry: RetryConfig(maxAttempts: 3),
+));
+
+// Disable retry for non-idempotent request
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.processPayment(payment),
+  options: CallOptions.noRetry(),
+);
+```
+
+#### Pattern 4: No global config (backward compatible)
+```dart
+// Don't set global config - works like before
+final result = await SimpleNetworkHandler.safeCall(() => api.getData());
+
+// Explicitly enable retry for specific call
+final result = await SimpleNetworkHandler.safeCall(
+  () => api.getData(),
+  options: CallOptions(retry: RetryConfig(maxAttempts: 3)),
+);
+```
+
+---
+
 ## File Structure After Phase 1
 
 ```
@@ -625,7 +1095,8 @@ lib/
     ├── simple_network_handler.dart      # Main handler (updated)
     ├── retry_config.dart                # NEW: Retry configuration
     ├── timeout_config.dart              # NEW: Timeout configuration
-    └── call_options.dart                # NEW: Consolidated options
+    ├── call_options.dart                # NEW: Per-call options
+    └── global_config.dart               # NEW: Global configuration
 ```
 
 ---
@@ -650,6 +1121,7 @@ export 'src/simple_network_handler.dart';
 export 'src/retry_config.dart';               // NEW
 export 'src/timeout_config.dart';             // NEW
 export 'src/call_options.dart';               // NEW
+export 'src/global_config.dart';              // NEW
 ```
 
 ### Updated `safeCall` Signature
@@ -868,16 +1340,17 @@ final result = await SimpleNetworkHandler.safeCall(
 ## Implementation Order
 
 1. **Create `timeout_config.dart`** - No dependencies
-2. **Create `retry_config.dart`** - No dependencies
+2. **Create `retry_config.dart`** - No dependencies (include `disabled` preset)
 3. **Create `cancellation_failure.dart`** - Depends on `failure.dart`
 4. **Create `call_options.dart`** - Depends on retry and timeout configs
-5. **Update `error_registry.dart`** - Add timeout registry
-6. **Update `error_mapping_interceptor.dart`** - Add onRequest for timeouts
-7. **Update `simple_network_handler.dart`** - Add retry loop and cancellation
-8. **Update exports** - Add new files to public API
-9. **Add tests** - Unit and integration tests
-10. **Update example** - Demonstrate new features
-11. **Update documentation** - README and CHANGELOG
+5. **Create `global_config.dart`** - Depends on retry, timeout, and call_options
+6. **Update `error_registry.dart`** - Add timeout/retry registries
+7. **Update `error_mapping_interceptor.dart`** - Add onRequest for timeouts
+8. **Update `simple_network_handler.dart`** - Add global config, retry loop, cancellation
+9. **Update exports** - Add new files to public API
+10. **Add tests** - Unit and integration tests
+11. **Update example** - Demonstrate new features with global config
+12. **Update documentation** - README and CHANGELOG
 
 ---
 
@@ -885,22 +1358,23 @@ final result = await SimpleNetworkHandler.safeCall(
 
 | Component | Lines of Code | Complexity |
 |-----------|---------------|------------|
-| `retry_config.dart` | ~120 | Medium |
-| `timeout_config.dart` | ~60 | Low |
+| `retry_config.dart` | ~130 | Medium |
+| `timeout_config.dart` | ~70 | Low |
 | `cancellation_failure.dart` | ~25 | Low |
-| `call_options.dart` | ~35 | Low |
-| `error_registry.dart` changes | ~15 | Low |
-| `interceptor` changes | ~20 | Low |
-| `simple_network_handler.dart` changes | ~60 | Medium |
-| Tests | ~200 | Medium |
-| **Total** | **~535** | **Medium** |
+| `call_options.dart` | ~45 | Low |
+| `global_config.dart` | ~80 | Low |
+| `error_registry.dart` changes | ~30 | Low |
+| `interceptor` changes | ~25 | Low |
+| `simple_network_handler.dart` changes | ~80 | Medium |
+| Tests | ~250 | Medium |
+| **Total** | **~735** | **Medium** |
 
 ---
 
 ## Open Questions
 
 1. **Default retry behavior**: Should there be a global default retry config, or always explicit?
-   - Recommendation: Always explicit to maintain backward compatibility
+   - **RESOLVED**: Support both via `GlobalConfig` - users can set defaults at startup, override per-call
 
 2. **Retry on non-Dio exceptions**: Should general exceptions (from `generalRegistry`) be retryable?
    - Recommendation: Yes, via `retryWhen` callback for flexibility
@@ -909,4 +1383,7 @@ final result = await SimpleNetworkHandler.safeCall(
    - Recommendation: Yes, check cancellation in onRequest
 
 4. **Timeout precedence**: If both CallOptions timeout and registry timeout are set, which wins?
-   - Recommendation: CallOptions takes precedence (more specific)
+   - **RESOLVED**: Per-call (CallOptions) > Endpoint-specific (Registry) > Global (GlobalConfig/Registry defaults)
+
+5. **GlobalConfig vs ErrorRegistry**: Where should global defaults live?
+   - **RESOLVED**: Support both approaches - `setGlobalConfig()` for simplicity, or override registry properties for centralized config
