@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:simple_network_handler/simple_network_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../simple_network_handler_supabase.dart';
+
 /// A handler for safely executing Supabase operations with centralized error handling.
 ///
 /// This follows the same pattern as [SimpleNetworkHandler] but is designed
