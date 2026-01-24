@@ -1,9 +1,9 @@
 name: simple_network_handler
-description: A package for handling network errors with error registry and interceptors
-version: 1.0.4
+description: A package for handling network errors with error registry and interceptors. Supports Dio and Supabase.
+version: 1.1.0
 repository: https://github.com/keep-it-simple-dev/simple_network_handler
 issue_tracker: https://github.com/keep-it-simple-dev/simple_network_handler/issues
-topics: [dio, network, error-handling]
+topics: [dio, network, error-handling, supabase]
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
   dartz: ^0.10.1
   dio: ^5.8.0+1
+  supabase_flutter: ^2.8.0
 
 dev_dependencies:
   flutter_test:
