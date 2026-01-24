@@ -542,10 +542,11 @@ packages:
   simple_network_handler:
     dependency: "direct main"
     description:
-      path: ".."
-      relative: true
-    source: path
-    version: "1.0.3"
+      name: simple_network_handler
+      sha256: "02b44256c2e8c38406119701dfddf675e10588156b5e3dc6eb6ec2dad4b2466d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.4"
   sky_engine:
     dependency: transitive
     description: flutter

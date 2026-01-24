@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:simple_network_handler/simple_network_handler.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../simple_network_handler_supabase.dart';
 
@@ -112,12 +111,10 @@ class SupabaseNetworkHandler {
 
     // Try auth error registry using the status code as error code
     final errorCode = exception.statusCode ?? exception.message;
-    if (errorCode != null) {
-      final authFailureFactory =
-          _errorRegistry!.authErrorRegistry[errorCode];
-      if (authFailureFactory != null) {
-        return Left(authFailureFactory(exception));
-      }
+    final authFailureFactory =
+        _errorRegistry!.authErrorRegistry[errorCode];
+    if (authFailureFactory != null) {
+      return Left(authFailureFactory(exception));
     }
 
     // Try general error registry
@@ -227,12 +224,10 @@ class SupabaseNetworkHandler {
 
     // Try function error registry using status code
     final statusCode = exception.status;
-    if (statusCode != null) {
-      final functionFactory =
-          _errorRegistry!.functionErrorRegistry[statusCode];
-      if (functionFactory != null) {
-        return Left(functionFactory(exception));
-      }
+    final functionFactory =
+        _errorRegistry!.functionErrorRegistry[statusCode];
+    if (functionFactory != null) {
+      return Left(functionFactory(exception));
     }
 
     // Try general error registry
