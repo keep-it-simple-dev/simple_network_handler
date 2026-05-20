@@ -63,10 +63,16 @@ abstract class SupabaseErrorRegistry {
   /// Common status codes: 400, 401, 403, 404, 409, 500, etc.
   SupabaseStatusCodeRegistry get postgrestStatusRegistry => {};
 
-  /// Returns the mapping for AuthException error codes to failures
+  /// Returns the mapping for AuthException errors to failures.
   ///
-  /// Error codes include: 'invalid_credentials', 'user_not_found',
-  /// 'email_not_confirmed', 'invalid_grant', etc.
+  /// Keys are matched against the [AuthException] in priority order:
+  /// 1. `code` — the semantic error code, e.g. 'invalid_credentials',
+  ///    'user_not_found', 'email_not_confirmed', 'invalid_grant'.
+  /// 2. `statusCode` — the numeric HTTP status as a string, e.g. '400', '422'.
+  /// 3. `message` — the raw human-readable message.
+  ///
+  /// Prefer keying by `code`; fall back to `statusCode`/`message` only for
+  /// errors that do not carry a semantic code.
   /// See: https://supabase.com/docs/reference/dart/auth-error-codes
   SupabaseAuthErrorRegistry get authErrorRegistry => {};
 

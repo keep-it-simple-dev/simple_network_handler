@@ -109,10 +109,12 @@ class SupabaseNetworkHandler {
       if (customResult != null) return customResult;
     }
 
-    // Try auth error registry using the status code as error code
-    final errorCode = exception.statusCode ?? exception.message;
-    final authFailureFactory =
-        _errorRegistry!.authErrorRegistry[errorCode];
+    // Try the auth error registry. Modern Supabase `AuthException`s expose a
+    // semantic `code` (e.g. 'email_not_confirmed', 'invalid_credentials');
+    // older errors only carry a numeric `statusCode` or a human-readable
+    // `message`. Look each up in priority order (most specific first) so a
+    // registry can be keyed by whichever value is available.
+    final authFailureFactory = _resolveAuthFactory(exception);
     if (authFailureFactory != null) {
       return Left(authFailureFactory(exception));
     }
@@ -125,6 +127,28 @@ class SupabaseNetworkHandler {
     }
 
     return Left(_errorRegistry!.genericError);
+  }
+
+  /// Resolves the registered failure factory for an [AuthException].
+  ///
+  /// Tries the registry keys in priority order: the semantic [AuthException.code]
+  /// first, then the [AuthException.statusCode], then the [AuthException.message].
+  /// Returns `null` when none of them are registered.
+  static Failure Function(AuthException)? _resolveAuthFactory(
+    AuthException exception,
+  ) {
+    final registry = _errorRegistry!.authErrorRegistry;
+    final lookupKeys = <String?>[
+      exception.code,
+      exception.statusCode,
+      exception.message,
+    ];
+    for (final key in lookupKeys) {
+      if (key == null) continue;
+      final factory = registry[key];
+      if (factory != null) return factory;
+    }
+    return null;
   }
 
   /// Handles PostgrestException errors (database/REST API failures)

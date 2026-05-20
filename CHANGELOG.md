@@ -1,3 +1,6 @@
+# 1.1.1
+  - fix: `SupabaseNetworkHandler` now resolves `AuthException`s against the auth registry by semantic `code` (e.g. `email_not_confirmed`, `invalid_credentials`), falling back to `statusCode` and then `message`. Previously only `statusCode`/`message` were checked, so registries keyed by error codes never matched.
+
 # 1.1.0
   - feat: add Supabase API support with `SupabaseNetworkHandler` and `SupabaseErrorRegistry`
   - feat: add Supabase-specific failure classes (AuthFailure, PostgrestFailure, StorageFailure, etc.)
