@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:simple_network_handler/simple_network_handler.dart';
 
-
 class ErrorMappingInterceptor extends Interceptor {
   final ErrorRegistry errorRegistry;
 
@@ -10,7 +9,29 @@ class ErrorMappingInterceptor extends Interceptor {
   });
 
   @override
-  void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    // Apply timeout configuration from registry
+    final path = options.path;
+    final timeoutConfig = errorRegistry.getTimeoutConfigForEndpoint(path);
+
+    if (timeoutConfig != null) {
+      if (timeoutConfig.connectTimeout != null) {
+        options.connectTimeout = timeoutConfig.connectTimeout;
+      }
+      if (timeoutConfig.sendTimeout != null) {
+        options.sendTimeout = timeoutConfig.sendTimeout;
+      }
+      if (timeoutConfig.receiveTimeout != null) {
+        options.receiveTimeout = timeoutConfig.receiveTimeout;
+      }
+    }
+
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(
+      Response<dynamic> response, ResponseInterceptorHandler handler) {
     final path = response.requestOptions.path;
     final status = response.statusCode;
     final data = response.data;
