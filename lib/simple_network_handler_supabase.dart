@@ -43,8 +43,9 @@ export 'package:supabase_flutter/supabase_flutter.dart'
         StorageException,
         FunctionException;
 
-// Export core failure class
+// Export core failure class + the transport-aware fold helper
 export 'src/failure.dart';
+export 'src/map_business_extension.dart';
 
 // Export Supabase-specific components
 export 'src/supabase_error_registry.dart';

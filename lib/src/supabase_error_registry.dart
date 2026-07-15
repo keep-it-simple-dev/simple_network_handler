@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:simple_network_handler/simple_network_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -97,4 +99,44 @@ abstract class SupabaseErrorRegistry {
 
   /// Optional: Override to provide custom handling for realtime errors
   Failure? handleRealtimeError(Object error) => null;
+
+  /// The failure returned for a transport-level error (the request never
+  /// reached the backend / the backend was unreachable) — see
+  /// [isTransportError].
+  ///
+  /// Defaults to [genericError] so existing consumers behave identically
+  /// without opting in. Override to return a dedicated (ideally localized)
+  /// offline failure — preferably one that mixes in [TransportFailure] so UIs
+  /// and observers can special-case connectivity once, regardless of feature:
+  ///
+  /// ```dart
+  /// class OfflineFailure extends Failure with TransportFailure { ... }
+  ///
+  /// @override
+  /// Failure get transportError => const OfflineFailure();
+  /// ```
+  Failure get transportError => genericError;
+
+  /// Whether [error] represents a transport-level problem (the request never
+  /// reached the backend / the backend was unreachable) rather than a business
+  /// rule.
+  ///
+  /// The default covers [TimeoutException] (from `dart:async`) and
+  /// `SocketException` (no connectivity / host unreachable). `SocketException`
+  /// lives in `dart:io`, which this package deliberately does NOT import (that
+  /// would break web compilation), so it is matched by runtime type name
+  /// instead of `is`.
+  ///
+  /// Override to broaden or narrow the set — e.g. to also treat the `http`
+  /// package's `ClientException` as a transport error:
+  ///
+  /// ```dart
+  /// @override
+  /// bool isTransportError(Object error) =>
+  ///     super.isTransportError(error) || error is ClientException;
+  /// ```
+  bool isTransportError(Object error) {
+    if (error is TimeoutException) return true;
+    return error.runtimeType.toString() == 'SocketException';
+  }
 }

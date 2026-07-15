@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:simple_network_handler/simple_network_handler_supabase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -18,7 +20,7 @@ abstract class ExampleSupabaseRepository {
       String id, Map<String, dynamic> userData);
   Future<Either<Failure, void>> deleteUser(String id);
   Future<Either<Failure, String>> uploadFile(
-      String bucket, String path, List<int> fileBytes);
+      String bucket, String path, Uint8List fileBytes);
   Future<Either<Failure, dynamic>> invokeFunction(
       String functionName, Map<String, dynamic> body);
 }
@@ -124,7 +126,7 @@ class ExampleSupabaseRepositoryImpl implements ExampleSupabaseRepository {
   Future<Either<Failure, String>> uploadFile(
     String bucket,
     String path,
-    List<int> fileBytes,
+    Uint8List fileBytes,
   ) {
     return SupabaseNetworkHandler.safeCall(
       () => _supabase.storage.from(bucket).uploadBinary(path, fileBytes),

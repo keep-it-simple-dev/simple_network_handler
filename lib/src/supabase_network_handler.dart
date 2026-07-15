@@ -52,7 +52,10 @@ class SupabaseNetworkHandler {
   /// The error handling priority is:
   /// 1. [onError] callback (if provided) for custom handling
   /// 2. Error registry mappings (auth, postgrest, storage, function, general)
-  /// 3. [genericError] from the registry as fallback
+  /// 3. For unrecognized exceptions: the realtime hook, then transport-level
+  ///    classification (`isTransportError` → `transportError`) — see
+  ///    [_handleGeneralException] for the full precedence.
+  /// 4. [genericError] from the registry as fallback
   ///
   /// Example:
   /// ```dart
@@ -264,7 +267,19 @@ class SupabaseNetworkHandler {
     return Left(_errorRegistry!.genericError);
   }
 
-  /// Handles general/unknown exceptions
+  /// Handles general/unknown exceptions.
+  ///
+  /// Precedence (highest to lowest):
+  /// 1. [onError] callback (if it returns a non-null result)
+  /// 2. [SupabaseErrorRegistry.handleRealtimeError] — consulted first, exactly
+  ///    as before, so any consumer that classified transport errors here keeps
+  ///    behaving identically.
+  /// 3. [SupabaseErrorRegistry.isTransportError] →
+  ///    [SupabaseErrorRegistry.transportError] — first-class transport-level
+  ///    classification (offline / timeout / unreachable). Only reached when the
+  ///    realtime hook did not already produce a failure.
+  /// 4. [SupabaseErrorRegistry.generalErrorRegistry] by runtime type
+  /// 5. [SupabaseErrorRegistry.genericError] (final fallback)
   static Either<Failure, T> _handleGeneralException<T>(
     Object exception,
     Either<Failure, T>? Function(Object error)? onError,
@@ -275,10 +290,19 @@ class SupabaseNetworkHandler {
       if (customResult != null) return customResult;
     }
 
-    // Try realtime error handler
+    // Try realtime error handler (kept first so pre-existing consumers that
+    // classify transport errors via this hook keep working unchanged).
     final realtimeFailure = _errorRegistry!.handleRealtimeError(exception);
     if (realtimeFailure != null) {
       return Left(realtimeFailure);
+    }
+
+    // Transport-level errors (offline / timeout / unreachable): surface the
+    // registry's transportError so connectivity can be handled once, regardless
+    // of feature. Default transportError == genericError, so registries that do
+    // not opt in behave exactly as before.
+    if (_errorRegistry!.isTransportError(exception)) {
+      return Left(_errorRegistry!.transportError);
     }
 
     // Try general error registry

@@ -1,6 +1,6 @@
 name: simple_network_handler
 description: A package for handling network errors with error registry and interceptors. Supports Dio and Supabase.
-version: 1.1.1
+version: 1.3.0
 repository: https://github.com/keep-it-simple-dev/simple_network_handler
 issue_tracker: https://github.com/keep-it-simple-dev/simple_network_handler/issues
 topics: [dio, network, error-handling, supabase]
